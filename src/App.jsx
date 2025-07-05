@@ -11,7 +11,6 @@ export default function App() {
   return (
     <div style={{ padding: '2rem', fontFamily: 'sans-serif' }}>
       <h1>🌩 CloudCore</h1>
-      <p>Upload and organize your SAT resources.</p>
 
       <input type="file" onChange={handleUpload} />
 
