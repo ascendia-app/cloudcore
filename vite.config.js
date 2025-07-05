@@ -3,5 +3,5 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
-  base: '/cloudcore/', // <- MUST match your repo name
+  base: '/cloudcore/', // ⚠️ must match your GitHub repo name exactly
 });
