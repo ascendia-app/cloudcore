@@ -1,101 +1,140 @@
 import React, { useState, useEffect } from "react";
+import {
+  getAuth,
+  signInWithPopup,
+  GoogleAuthProvider,
+  signOut,
+  onAuthStateChanged,
+} from "firebase/auth";
+import {
+  getStorage,
+  ref,
+  uploadBytes,
+  getDownloadURL,
+  listAll,
+} from "firebase/storage";
+import { initializeApp } from "firebase/app";
 import "./styles.css";
 
-function App() {
-  const [files, setFiles] = useState([]);
-  const [darkMode, setDarkMode] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
+// 🔥 Firebase Config
+const firebaseConfig = {
+  apiKey: "AIzaSyCN-Cv8ZBGAM6YDTbwp1MdSMrgv8dgw_Ys",
+  authDomain: "cloudcore-f29e2.firebaseapp.com",
+  projectId: "cloudcore-f29e2",
+  storageBucket: "cloudcore-f29e2.appspot.com",
+  messagingSenderId: "382923348965",
+  appId: "1:382923348965:web:14fb1b835b053c94e82d0c",
+  measurementId: "G-QZ5NGHQJ5B",
+};
 
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const storage = getStorage(app);
+
+export default function App() {
+  const [user, setUser] = useState(null);
+  const [file, setFile] = useState(null);
+  const [uploadedFiles, setUploadedFiles] = useState([]);
+  const [darkMode, setDarkMode] = useState(false);
+
+  // 👤 Auth state
   useEffect(() => {
-    const savedFiles = localStorage.getItem("cloudcore-files");
-    if (savedFiles) {
-      setFiles(JSON.parse(savedFiles));
-    }
+    onAuthStateChanged(auth, (u) => {
+      setUser(u);
+    });
   }, []);
 
+  // 🌗 Theme
   useEffect(() => {
-    localStorage.setItem("cloudcore-files", JSON.stringify(files));
-  }, [files]);
-
-  useEffect(() => {
-    document.body.className = darkMode ? "dark" : "";
+    document.documentElement.setAttribute("data-theme", darkMode ? "dark" : "light");
   }, [darkMode]);
 
-  const handleUpload = (e) => {
-    const tag = prompt("Enter a tag or subject for this file:");
-    const uploadedFiles = Array.from(e.target.files).map((file) => ({
-      name: file.name,
-      url: URL.createObjectURL(file),
-      tag: tag || "untagged",
-    }));
-    setFiles((prev) => [...prev, ...uploadedFiles]);
+  // ☁️ List uploaded files
+  useEffect(() => {
+    if (user) {
+      const userRef = ref(storage, `uploads/${user.uid}`);
+      listAll(userRef)
+        .then((res) => {
+          const promises = res.items.map((item) =>
+            getDownloadURL(item).then((url) => ({ name: item.name, url }))
+          );
+          Promise.all(promises).then(setUploadedFiles);
+        })
+        .catch(console.error);
+    }
+  }, [user]);
+
+  // 📤 Upload handler
+  const handleUpload = async () => {
+    if (!file || !user) return alert("Please select a file and login.");
+    const fileRef = ref(storage, `uploads/${user.uid}/${file.name}`);
+    await uploadBytes(fileRef, file);
+    const url = await getDownloadURL(fileRef);
+    setUploadedFiles((prev) => [...prev, { name: file.name, url }]);
+    setFile(null);
   };
 
-  const handleDelete = (index) => {
-    const updated = [...files];
-    updated.splice(index, 1);
-    setFiles(updated);
+  // 🔐 Login/Logout
+  const login = () => {
+    const provider = new GoogleAuthProvider();
+    signInWithPopup(auth, provider).catch(console.error);
   };
-
-  const handleEdit = (index) => {
-    const newName = prompt("New file name:", files[index].name);
-    const newTag = prompt("New tag:", files[index].tag);
-    const updated = [...files];
-    if (newName) updated[index].name = newName;
-    if (newTag) updated[index].tag = newTag;
-    setFiles(updated);
-  };
-
-  const handleShare = (file, type) => {
-    // Dummy links for now
-    const base = "https://cloudcore.app/file";
-    const link = `${base}/${encodeURIComponent(file.name)}?mode=${type}`;
-    navigator.clipboard.writeText(link);
-    alert(`${type === "edit" ? "Edit" : "View"} link copied to clipboard!`);
-  };
-
-  const filtered = files.filter(
-    (file) =>
-      file.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      file.tag.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const logout = () => signOut(auth);
 
   return (
-    <div className="container">
+    <>
       <header>
-        <h1>🌩️ CloudCore</h1>
-        <div className="controls">
-          <input
-            type="text"
-            placeholder="Search files..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-          <input type="file" onChange={handleUpload} multiple />
-          <button onClick={() => setDarkMode(!darkMode)}>
-            {darkMode ? "Light" : "Dark"}
-          </button>
-        </div>
+        Cloudcore Dashboard
+        <button onClick={() => setDarkMode(!darkMode)} style={{
+          float: "right",
+          background: "white",
+          color: "black",
+          padding: "0.3rem 0.7rem",
+          borderRadius: "6px",
+          fontWeight: "bold",
+        }}>
+          {darkMode ? "☀ Light" : "🌙 Dark"}
+        </button>
       </header>
 
-      <div className="grid">
-        {filtered.map((file, index) => (
-          <div className="card" key={index}>
-            <h3>{file.name}</h3>
-            <p>Tag: {file.tag}</p>
-            <div className="buttons">
-              <a href={file.url} target="_blank" rel="noopener noreferrer">View</a>
-              <a href={file.url} download>Download</a>
-              <button onClick={() => handleEdit(index)}>Edit</button>
-              <button onClick={() => handleDelete(index)}>Delete</button>
-              <button onClick={() => handleShare(file, "view")}>Share View</button>
-              <button onClick={() => handleShare(file, "edit")}>Share Edit</button>
-            </div>
+      <div className="container">
+        {!user ? (
+          <div className="card">
+            <div className="card-title">Welcome to Cloudcore</div>
+            <p>Please sign in to upload and manage files.</p>
+            <button onClick={login}>Sign in with Google</button>
           </div>
-        ))}
+        ) : (
+          <>
+            <div className="card">
+              <div className="card-title">Upload File</div>
+              <input
+                type="file"
+                onChange={(e) => setFile(e.target.files[0])}
+              />
+              <button onClick={handleUpload}>Upload</button>
+              <button onClick={logout} style={{ background: "#ccc", color: "#333" }}>
+                Logout
+              </button>
+            </div>
+
+            <div className="card">
+              <div className="card-title">Your Uploaded Files</div>
+              {uploadedFiles.length === 0 ? (
+                <p>No files yet.</p>
+              ) : (
+                uploadedFiles.map((file, idx) => (
+                  <div key={idx} className="card-actions">
+                    <a href={file.url} target="_blank" rel="noopener noreferrer">
+                      {file.name}
+                    </a>
+                  </div>
+                ))
+              )}
+            </div>
+          </>
+        )}
       </div>
-    </div>
+    </>
   );
 }
-
-export default App;
